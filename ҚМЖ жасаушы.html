@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="kk"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Қысқа мерзімді жоспар (ҚМЖ) жасаушы</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f4f5f9;--fg:#1d2433;--card:#fff;--bd:#d9dde8;--ac:#2f5bd8;--mu:#69728a}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171f;--fg:#e8eaf2;--card:#1d2230;--bd:#323955;--ac:#7c9cff;--mu:#9aa3bd}}
+:root[data-theme="dark"]{--bg:#14171f;--fg:#e8eaf2;--card:#1d2230;--bd:#323955;--ac:#7c9cff;--mu:#9aa3bd}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,"Segoe UI",Arial,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0 .6em}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+label{font-size:.85rem;color:var(--mu);display:block}
+input{width:100%;box-sizing:border-box;padding:9px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+button{font:inherit;cursor:pointer;border-radius:999px;border:1px solid var(--bd);background:var(--card);color:var(--fg);padding:8px 14px}
+.chip.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.go{background:var(--ac);color:#fff;border-color:var(--ac);border-radius:10px;margin-top:12px;padding:10px 18px;font-weight:600}
+.dl{border-radius:10px;font-weight:600}
+button:disabled{opacity:.5;cursor:wait}
+#msg{color:var(--mu);margin:6px 0}
+#paper{background:#fff;color:#111;border:1px solid var(--bd);border-radius:6px;padding:22px;overflow-x:auto;font-size:14px}
+#paper h2{font-size:1.1rem;border-bottom:2px solid #2f5bd8;padding-bottom:3px;margin:20px 0 8px;color:#1d3a99}
+#paper table{border-collapse:collapse;width:100%;margin-bottom:6px}
+#paper td,#paper th{border:1px solid #666;padding:5px 8px;vertical-align:top;text-align:left}
+#paper th{background:#e8edfb}
+.sw{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sw div{border:1px solid #888;padding:8px;border-radius:6px}
+.q{margin:8px 0}.ans{color:#1a7a3a;font-size:.9rem}
+@media print{body{background:#fff}main>*:not(#paper){display:none!important}main{padding:0;max-width:none}#paper{border:0;padding:0}}
+</style></head><body><main>
+<h1>📘 Қысқа мерзімді жоспар (ҚМЖ) жасаушы</h1>
+<div class="card">
+ <div class="grid">
+  <div><label>Мектеп аты</label><input id="school" placeholder="№ 12 орта мектеп"></div>
+  <div><label>Пәні</label><input id="subj" placeholder="Биология"></div>
+  <div><label>Сынып</label><input id="cls" placeholder="7 «А»"></div>
+  <div><label>Сабақтың тақырыбы</label><input id="topic" placeholder="Фотосинтез"></div>
+  <div><label>Күні</label><input id="date" type="date"></div>
+  <div><label>Педагогтің аты-жөні (міндетті емес)</label><input id="teacher"></div>
+ </div>
+ <div class="chips" id="chips"></div>
+ <button class="go" id="gen">✨ ҚМЖ және қосымшаны жасау</button>
+ <div id="msg"></div>
+</div>
+<div class="card" id="dls" style="display:none">
+ <b>Жүктеп алу / басып шығару:</b>
+ <div class="chips">
+  <button class="dl" data-f="docx">📄 Word</button><button class="dl" data-f="xlsx">📊 Excel</button>
+  <button class="dl" data-f="pdf">📕 PDF</button><button class="dl" data-f="pptx">📽 PPT</button>
+  <button class="dl" data-f="print">🖨 Принтер</button>
+ </div>
+</div>
+<div id="paper" style="display:none"></div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+const T={mm:'Mind-map',cm:'Concept-map',qz:'Quiz (10 сұрақ)',sw:'SWOT',pp:'Презентация'};
+const sel=new Set(Object.keys(T));let D=null,M={};
+const $=i=>document.getElementById(i);
+$('date').value=new Date().toISOString().slice(0,10);
+$('chips').innerHTML=Object.entries(T).map(([k,v])=>`<button class="chip on" data-k="${k}">${v}</button>`).join('');
+$('chips').onclick=e=>{const k=e.target.dataset.k;if(!k)return;sel.has(k)?sel.delete(k):sel.add(k);e.target.classList.toggle('on')};
+const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const nl=s=>esc(s).replace(/\n/g,'<br>');
+const dstr=d=>d?d.split('-').reverse().join('.'):'';
+const STAGES=['Сабақтың басы','Жаңа сабақ','Топтық жұмыс','Жұптық жұмыс','Жеке тапсырма','Сабақты қорытындылау','Сабақтың соңы'];
+
+$('gen').onclick=async()=>{
+ M={school:$('school').value.trim(),subj:$('subj').value.trim(),cls:$('cls').value.trim(),topic:$('topic').value.trim(),date:dstr($('date').value),teacher:$('teacher').value.trim()};
+ if(!M.topic||!M.subj){$('msg').textContent='Пәнді және тақырыпты жазыңыз.';return}
+ const sample=await claude.use('sample');
+ if(!sample){$('msg').textContent='Бұл көріністе Claude генерациясы қолжетімсіз.';return}
+ $('gen').disabled=true;$('msg').textContent='Жасалуда… (30–60 сек)';
+ const spec={mm:'"mm":{"center":"","branches":[{"name":"","items":["","",""]}]} (5-6 тармақ)',
+  cm:'"cm":[{"from":"","rel":"","to":""}] (8-10 байланыс)',
+  qz:'"qz":[{"q":"","o":["A","B","C","D"],"a":0}] (дәл 10 сұрақ, a — дұрыс жауап индексі 0-3)',
+  sw:'"sw":{"S":["",""],"W":["",""],"O":["",""],"T":["",""]} (әрқайсысында 3-4 тармақ)',
+  pp:'"pp":[{"t":"","b":["","",""]}] (6 слайд)'};
+ const p=`Сен Қазақстан мектебінің әдіскерісің. Пән: ${M.subj}. Сынып: ${M.cls||'—'}. Тақырып: "${M.topic}". ҚР жалпы білім беретін пәндік оқу бағдарламасына (жаңартылған мазмұн, оқыту мақсаттарының кодтарымен, мысалы 7.1.2.3) сәйкес қазақ тілінде қысқа мерзімді жоспар (ҚМЖ) және сабаққа қосымша тапсырмалар жаса. Тек мына JSON-ды қайтар, басқа мәтінсіз:
+{"bolim":"бөлім атауы","oqu":["код және оқыту мақсаты","..."],"maqsat":"сабақтың мақсаты (барлығы/көпшілігі/кейбір оқушылар деңгейімен)","qundylyq":"құндылықтар",
+"rows":[7 объект, дәл осы кезекпен: ${STAGES.join(' | ')}; әрқайсысы {"time":"уақыты (мин)","t":"мұғалімнің іс-әрекеті (әдіс, тапсырма, ой қозғау, үй тапсырмасын пысықтау т.б.)","s":"оқушының іс-әрекеті және дескрипторлар","b":"бағалау (1 балл / 2 балл / 3 балл / 2 балл; барлығы 10 балл; жаңа сабақ пен соңында '—')","r":"ресурс (оқулық, платформа, қосымшадағы тапсырма нөмірі)"}],
+${[...sel].map(k=>spec[k]).join(',\n')}}
+Топтық жұмыста ${sel.has('mm')||sel.has('cm')?'mind-map/concept-map':'тапсырма'}, жеке тапсырмада ${sel.has('qz')?'quiz':'деңгейлік тапсырма'}, қорытындылауда ${sel.has('sw')?'SWOT':'кері байланыс'} қолданылсын. Жоспар сабақтың ұзақтығы 40–45 минутқа сай болсын.`;
+ try{D=await sample.json(p,{cache:false,modelTier:'complex'});render();$('msg').textContent='Дайын ✅ Төмендегі батырмалармен жүктеп алыңыз.'}
+ catch(e){$('msg').textContent='Қате: '+(e.message||e.code||'қайталап көріңіз')}
+ $('gen').disabled=false};
+
+function mmSvg(m){const n=m.branches.length,cx=350,cy=200;let s=`<svg viewBox="0 0 700 400" style="width:100%;min-width:560px"><rect width="700" height="400" fill="#fff"/>`;
+ m.branches.forEach((b,i)=>{const a=2*Math.PI*i/n-Math.PI/2,x=cx+Math.cos(a)*190,y=cy+Math.sin(a)*140;
+  s+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="#2f5bd8" stroke-width="2"/><rect x="${x-60}" y="${y-15}" width="120" height="30" rx="15" fill="#e8edfb" stroke="#2f5bd8"/><text x="${x}" y="${y+4}" font-size="12" font-weight="700" text-anchor="middle" fill="#111">${esc(b.name).slice(0,20)}</text>`+
+  (b.items||[]).slice(0,3).map((t,j)=>`<text x="${x}" y="${y+30+j*13}" font-size="10" text-anchor="middle" fill="#333">• ${esc(t).slice(0,26)}</text>`).join('')});
+ return s+`<ellipse cx="${cx}" cy="${cy}" rx="75" ry="32" fill="#2f5bd8"/><text x="${cx}" y="${cy+5}" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">${esc(m.center||M.topic).slice(0,22)}</text></svg>`}
+
+function hdrRows(){return[['Мектеп',M.school],['Бөлім',D.bolim],['Педагогтің аты-жөні',M.teacher],['Күні',M.date],['Пән / Сынып',`${M.subj} / ${M.cls}`],['Қатысушылар саны / Қатыспағандар саны',' / '],['Сабақтың тақырыбы',M.topic],['Оқу бағдарламасына сәйкес оқыту мақсаттары',(D.oqu||[]).join('\n')],['Сабақтың мақсаты',D.maqsat],['Құндылықтар',D.qundylyq]]}
+
+function render(){
+ let h=`<p><b>Тексерілді:</b></p><table>${hdrRows().map(r=>`<tr><th style="width:30%">${esc(r[0])}</th><td>${nl(r[1])}</td></tr>`).join('')}</table>
+ <h2>Сабақтың барысы</h2><table><tr><th>Сабақтың кезеңі / уақыты</th><th>Мұғалімнің іс-әрекеті</th><th>Оқушының іс-әрекеті</th><th>Бағалау</th><th>Ресурстар</th></tr>
+ ${D.rows.map((r,i)=>`<tr><td><b>${STAGES[i]||''}</b><br>${esc(r.time)}</td><td>${nl(r.t)}</td><td>${nl(r.s)}</td><td>${nl(r.b)}</td><td>${nl(r.r)}</td></tr>`).join('')}</table>
+ <h2 style="text-align:center;border:0;margin-top:30px">ҚОСЫМША: тақырып бойынша тапсырмалар</h2>`;
+ if(D.mm)h+=`<h2>1. Mind-map (ой картасы)</h2>${mmSvg(D.mm)}`;
+ if(D.cm)h+=`<h2>2. Concept-map (ұғымдар картасы)</h2><table><tr><th>Ұғым</th><th>Байланыс</th><th>Ұғым</th></tr>${D.cm.map(r=>`<tr><td>${esc(r.from)}</td><td>→ ${esc(r.rel)} →</td><td>${esc(r.to)}</td></tr>`).join('')}</table>`;
+ if(D.qz)h+=`<h2>3. Quiz (10 сұрақ)</h2>${D.qz.map((q,i)=>`<div class="q"><b>${i+1}. ${esc(q.q)}</b><br>${q.o.map((o,j)=>'ABCD'[j]+') '+esc(o)).join('<br>')}<div class="ans">Дұрыс жауап: ${'ABCD'[q.a]}</div></div>`).join('')}`;
+ if(D.sw){const w=(k,t)=>`<div><b>${t}</b><ul>${(D.sw[k]||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`;
+  h+=`<h2>4. SWOT-талдау</h2><div class="sw">${w('S','Күшті жақтары (S)')}${w('W','Әлсіз жақтары (W)')}${w('O','Мүмкіндіктер (O)')}${w('T','Қауіптер (T)')}</div>`}
+ if(D.pp)h+=`<h2>5. Презентация жоспары</h2>${D.pp.map((s,i)=>`<p><b>Слайд ${i+1}. ${esc(s.t)}</b></p><ul>${s.b.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`).join('')}`;
+ $('paper').innerHTML=h;$('paper').style.display='block';$('dls').style.display='block'}
+
+const save=async(name,data)=>{const d=await claude.use('downloads');if(!d){$('msg').textContent='Жүктеу бұл көріністе қолжетімсіз.';return}
+ try{await d.save({filename:name,data})}catch(e){if(e.code!=='declined')$('msg').textContent='Жүктеу қатесі: '+(e.message||e.code)}};
+const base=()=>'ҚМЖ_'+(M.topic||'сабақ').replace(/[^\p{L}\p{N}]+/gu,'_').slice(0,40);
+
+async function mkDocx(){const d=docx,P=(t,o={})=>new d.Paragraph({children:String(t??'').split('\n').map((x,i)=>new d.TextRun({text:x,bold:o.b,break:i?1:0})),heading:o.h,bullet:o.bl?{level:0}:undefined,spacing:{after:80}});
+ const tbl=(rows,w)=>new d.Table({width:{size:100,type:d.WidthType.PERCENTAGE},rows:rows.map((r,i)=>new d.TableRow({children:r.map((c,j)=>new d.TableCell({children:[P(c,{b:i===0&&w!==1||(w===1&&j===0)})],width:{size:w===1?(j?70:30):100/r.length,type:d.WidthType.PERCENTAGE}}))}))});
+ const c=[P('Тексерілді:',{b:1}),tbl(hdrRows(),1),P('Сабақтың барысы',{h:d.HeadingLevel.HEADING_1}),
+  tbl([['Сабақтың кезеңі / уақыты','Мұғалімнің іс-әрекеті','Оқушының іс-әрекеті','Бағалау','Ресурстар'],...D.rows.map((r,i)=>[`${STAGES[i]||''}\n${r.time}`,r.t,r.s,r.b,r.r])]),
+  P('ҚОСЫМША',{h:d.HeadingLevel.TITLE})];
+ if(D.mm){c.push(P('1. Mind-map',{h:d.HeadingLevel.HEADING_1}),P(D.mm.center||M.topic,{b:1}));D.mm.branches.forEach(b=>{c.push(P(b.name,{b:1,bl:1}));b.items.forEach(i=>c.push(P('   – '+i)))})}
+ if(D.cm)c.push(P('2. Concept-map',{h:d.HeadingLevel.HEADING_1}),tbl([['Ұғым','Байланыс','Ұғым'],...D.cm.map(r=>[r.from,r.rel,r.to])]));
+ if(D.qz){c.push(P('3. Quiz',{h:d.HeadingLevel.HEADING_1}));D.qz.forEach((q,i)=>{c.push(P(`${i+1}. ${q.q}`,{b:1}));q.o.forEach((o,j)=>c.push(P('ABCD'[j]+') '+o)));c.push(P('Дұрыс жауап: '+'ABCD'[q.a]))})}
+ if(D.sw){const s=D.sw,j=k=>(s[k]||[]).map(x=>'• '+x).join('\n');c.push(P('4. SWOT',{h:d.HeadingLevel.HEADING_1}),tbl([['Күшті жақтары (S)','Әлсіз жақтары (W)'],[j('S'),j('W')],['Мүмкіндіктер (O)','Қауіптер (T)'],[j('O'),j('T')]]))}
+ if(D.pp){c.push(P('5. Презентация жоспары',{h:d.HeadingLevel.HEADING_1}));D.pp.forEach((s,i)=>{c.push(P(`Слайд ${i+1}. ${s.t}`,{b:1}));s.b.forEach(x=>c.push(P(x,{bl:1})))})}
+ return d.Packer.toBlob(new d.Document({sections:[{properties:{page:{size:{orientation:d.PageOrientation.LANDSCAPE}}},children:c}]}))}
+
+function mkXlsx(){const wb=XLSX.utils.book_new(),add=(n,r,w)=>{const s=XLSX.utils.aoa_to_sheet(r);if(w)s['!cols']=w.map(x=>({wch:x}));XLSX.utils.book_append_sheet(wb,s,n)};
+ add('ҚМЖ',[...hdrRows(),[],['Сабақтың кезеңі','Уақыты','Мұғалімнің іс-әрекеті','Оқушының іс-әрекеті','Бағалау','Ресурстар'],...D.rows.map((r,i)=>[STAGES[i],r.time,r.t,r.s,r.b,r.r])],[30,14,50,50,12,30]);
+ if(D.mm)add('Mind-map',[['Тармақ','Элементтер'],...D.mm.branches.map(b=>[b.name,b.items.join('; ')])],[30,70]);
+ if(D.cm)add('Concept-map',[['Ұғым','Байланыс','Ұғым'],...D.cm.map(r=>[r.from,r.rel,r.to])],[30,30,30]);
+ if(D.qz)add('Quiz',[['№','Сұрақ','A','B','C','D','Дұрыс'],...D.qz.map((q,i)=>[i+1,q.q,...q.o,'ABCD'[q.a]])],[5,50,20,20,20,20,8]);
+ if(D.sw){const s=D.sw,n=Math.max(...'SWOT'.split('').map(k=>(s[k]||[]).length));add('SWOT',[['S','W','O','T'],...Array.from({length:n},(_,i)=>'SWOT'.split('').map(k=>(s[k]||[])[i]||''))],[40,40,40,40])}
+ if(D.pp)add('Презентация',[['№','Тақырып','Мазмұн'],...D.pp.map((s,i)=>[i+1,s.t,s.b.join('\n')])],[5,30,70]);
+ return new Blob([XLSX.write(wb,{type:'array',bookType:'xlsx'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
+
+async function mkPptx(){const p=new PptxGenJS();p.layout='LAYOUT_WIDE';
+ const sl=(t,txt,fs)=>{const s=p.addSlide();s.addText(t,{x:.5,y:.3,w:12.3,h:.9,fontSize:30,bold:true,color:'1D3A99'});s.addText(txt,{x:.6,y:1.4,w:12,h:5.5,fontSize:fs||20,valign:'top',paraSpaceAfter:8})};
+ const bl=a=>a.map(x=>({text:x,options:{bullet:true,breakLine:true}}));
+ const s0=p.addSlide();s0.background={color:'2F5BD8'};
+ s0.addText(M.topic,{x:.6,y:2,w:12,h:1.6,fontSize:44,bold:true,color:'FFFFFF',align:'center'});
+ s0.addText([M.school,M.subj,M.cls,M.date].filter(Boolean).join('  •  '),{x:.6,y:4,w:12,h:.8,fontSize:22,color:'FFFFFF',align:'center'});
+ sl('Сабақтың мақсаты',bl([D.maqsat,...(D.oqu||[]),'Құндылықтар: '+D.qundylyq]),18);
+ if(D.pp)D.pp.forEach(s=>sl(s.t,bl(s.b)));
+ if(D.mm)sl('Mind-map: '+(D.mm.center||M.topic),bl(D.mm.branches.map(b=>b.name+': '+b.items.join(', '))),17);
+ if(D.cm)sl('Concept-map',bl(D.cm.map(r=>`${r.from} → ${r.rel} → ${r.to}`)),17);
+ if(D.sw){const s=p.addSlide(),b=[['S','Күшті жақтары','DCEBFF'],['W','Әлсіз жақтары','FFE3E3'],['O','Мүмкіндіктер','E1F5E5'],['T','Қауіптер','FFF1CC']];
+  s.addText('SWOT-талдау',{x:.5,y:.3,w:12,h:.8,fontSize:30,bold:true,color:'1D3A99'});
+  b.forEach(([k,t,c],i)=>s.addText([{text:t,options:{bold:true,breakLine:true}},...bl(D.sw[k]||[])],{x:.5+(i%2)*6.2,y:1.3+Math.floor(i/2)*2.9,w:6,h:2.8,fontSize:14,valign:'top',fill:{color:c}}))}
+ if(D.qz)for(let i=0;i<10;i+=5)sl(`Quiz (${i+1}–${i+5})`,D.qz.slice(i,i+5).map((q,j)=>({text:`${i+j+1}. ${q.q}  [${q.o.map((o,k)=>'ABCD'[k]+') '+o).join('  ')}]  ✔ ${'ABCD'[q.a]}`,options:{breakLine:true}})),13);
+ sl('Рефлексия',bl(['Бүгін не білдім?','Не қиын болды?','Нені білгім келеді?','Үй тапсырмасы: '+(D.rows[6]?.t||'')]),22);
+ return p.write({outputType:'blob'})}
+
+async function mkPdf(){const el=$('paper'),cv=await html2canvas(el,{scale:2,backgroundColor:'#fff'}),pdf=new jspdf.jsPDF('p','mm','a4'),W=210,H=297,mg=8,w=W-2*mg,ph=Math.floor(cv.width*(H-2*mg)/w);
+ for(let y=0,pg=0;y<cv.height;y+=ph,pg++){const c=document.createElement('canvas');c.width=cv.width;c.height=Math.min(ph,cv.height-y);c.getContext('2d').drawImage(cv,0,y,cv.width,c.height,0,0,cv.width,c.height);
+  if(pg)pdf.addPage();pdf.addImage(c.toDataURL('image/jpeg',.92),'JPEG',mg,mg,w,c.height*w/cv.width)}
+ return pdf.output('blob')}
+
+$('dls').onclick=async e=>{const f=e.target.dataset.f;if(!f||!D)return;
+ if(f==='print'){try{window.print()}catch(err){$('msg').textContent='Басып шығару бұл көріністе қолжетімсіз: PDF жүктеп алып, одан басып шығарыңыз.'}return}
+ const b=e.target;b.disabled=true;$('msg').textContent='Файл дайындалуда…';
+ try{const blob=await({docx:mkDocx,xlsx:mkXlsx,pptx:mkPptx,pdf:mkPdf}[f])();$('msg').textContent='';await save(base()+'.'+f,blob)}
+ catch(err){$('msg').textContent='Файл жасау қатесі ('+f+'): '+(err.message||err)}
+ b.disabled=false};
+</script></body></html>
